@@ -8,7 +8,7 @@ local LocalScript = LocalPlayer.PlayerScripts:FindFirstChild("LocalScript")
 
 local BlockedPatterns = {"wh9hvr3qrm", "w.*3qrm", "NoClip", "StrafingNoPhysics", "BackpackTool", "JumpPower", "Inf Nitro", "Renamed Service", "game.GetObjects", "_G.antiarrest", "Xpcall", "VisDetect", "Getupvalues", "FailedPcall"}
 
-local function AntiCheatCheck(...)
+function AntiCheatCheck(...)
     local args = {...}
     for _, arg in ipairs(args) do
         if type(arg) == "string" then
@@ -48,7 +48,7 @@ end)
 
 setreadonly(mt, true)
 
-local function HookRemoteEvents()
+function HookRemoteEvents()
     for _, v in pairs(getgc(true)) do
         if type(v) == "table" then
             pcall(function()
@@ -68,7 +68,7 @@ end
 
 pcall(HookRemoteEvents)
 
-local function PatchAntiCheat()
+function PatchAntiCheat()
     if not LocalScript then return end
     
     local success, env = pcall(getsenv, LocalScript)
@@ -124,7 +124,7 @@ print("Monitoring", #BlockedPatterns, "patterns")
 
 local DisabledConnections = {}
 
-local function DisableConnection(conn)
+function DisableConnection(conn)
     if conn.Function and conn.Enabled and not DisabledConnections[conn] then
         conn:Disable()
         DisabledConnections[conn] = true
@@ -136,7 +136,7 @@ local function DisableConnection(conn)
     return false
 end
 
-local function HookHumanoidStates()
+function HookHumanoidStates()
     local function ProcessHumanoid(humanoid)
         if not humanoid then return end
         
@@ -171,7 +171,7 @@ end
 
 task.spawn(HookHumanoidStates)
 
-local function HookBackpack()
+function HookBackpack()
     local backpack = LocalPlayer:WaitForChild("Backpack", 10)
     if not backpack then return end
     
