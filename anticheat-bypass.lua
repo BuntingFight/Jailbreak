@@ -8,7 +8,7 @@ local LocalScript = LocalPlayer.PlayerScripts:FindFirstChild("LocalScript")
 
 local BlockedPatterns = {"wh9hvr3qrm", "w.*3qrm", "NoClip", "StrafingNoPhysics", "BackpackTool", "JumpPower", "Inf Nitro", "Renamed Service", "game.GetObjects", "_G.antiarrest", "Xpcall", "VisDetect", "Getupvalues", "FailedPcall"}
 
-function AntiCheatCheck(...)
+local function AntiCheatCheck(...)
     local args = {...}
     for _, arg in ipairs(args) do
         if type(arg) == "string" then
@@ -22,6 +22,14 @@ function AntiCheatCheck(...)
     return false
 end
 
+local function FromAntiCheatCheck()
+    local caller = getcallingscript()
+    if caller and caller == LocalScript then
+        return true
+    end
+    return false
+end
+
 local mt = getrawmetatable(game)
 local oldNamecall = mt.__namecall
 local oldIndex = mt.__index
@@ -31,15 +39,18 @@ setreadonly(mt, false)
 mt.__namecall = newcclosure(function(self, ...)
     local method = getnamecallmethod()
     
-    if method == "FireServer" and AntiCheatCheck(...) then
-        return nil
+    if method == "FireServer" then
+        if FromAntiCheatCheck() and AntiCheatCheck(...) then
+            warn("Blocked AC call:", ...)
+            return nil
+        end
     end
     
     return oldNamecall(self, ...)
 end)
 
 mt.__index = newcclosure(function(self, key)
-    if key == "JumpPower" and typeof(self) == "Instance" and self:IsA("Humanoid") and self.Parent == LocalPlayer.Character then
+    if key == "JumpPower" and FromAntiCheatCheck() and typeof(self) == "Instance" and self:IsA("Humanoid") and self.Parent == LocalPlayer.Character then
         return 50
     end
     
@@ -48,14 +59,15 @@ end)
 
 setreadonly(mt, true)
 
-function HookRemoteEvents()
+local function HookRemoteEvents()
     for _, v in pairs(getgc(true)) do
         if type(v) == "table" then
             pcall(function()
                 if rawget(v, "FireServer") and not isreadonly(v) then
                     local oldFire = v.FireServer
                     v.FireServer = newcclosure(function(self, ...)
-                        if AntiCheatCheck(...) then
+                        if FromAntiCheatCheck() and AntiCheatCheck(...) then
+                            warn("Blocked GC FireServer:", ...)
                             return nil
                         end
                         return oldFire(self, ...)
@@ -68,7 +80,7 @@ end
 
 pcall(HookRemoteEvents)
 
-function PatchAntiCheat()
+local function PatchAntiCheat()
     if not LocalScript then return end
     
     local success, env = pcall(getsenv, LocalScript)
@@ -101,9 +113,6 @@ function PatchAntiCheat()
             local oldLoop = env.v_u_99
             env.v_u_99 = function(interval, callback, ...)
                 if callback == env.v_u_1145 then
-                    task.spawn(function()
-                        while task.wait(interval or 1) do end
-                    end)
                     return true
                 end
                 return oldLoop(interval, callback, ...)
@@ -114,7 +123,6 @@ end
 
 task.spawn(function()
     task.wait(2)
-    local LocalScript = LocalPlayer.PlayerScripts:FindFirstChild("LocalScript")
     if LocalScript then
         PatchAntiCheat()
     end
@@ -124,19 +132,16 @@ print("Monitoring", #BlockedPatterns, "patterns")
 
 local DisabledConnections = {}
 
-function DisableConnection(conn)
+local function DisableConnection(conn)
     if conn.Function and conn.Enabled and not DisabledConnections[conn] then
         conn:Disable()
         DisabledConnections[conn] = true
-        task.spawn(function()
-            while task.wait(0.25) do end
-        end)
         return true
     end
     return false
 end
 
-function HookHumanoidStates()
+local function HookHumanoidStates()
     local function ProcessHumanoid(humanoid)
         if not humanoid then return end
         
@@ -153,7 +158,7 @@ function HookHumanoidStates()
             end
             
             if disabled > 0 then
-                warn("Disabled", disabled, "connections")
+                warn("Disabled", disabled, "StateChanged connections")
             end
         end)
     end
@@ -171,7 +176,7 @@ end
 
 task.spawn(HookHumanoidStates)
 
-function HookBackpack()
+local function HookBackpack()
     local backpack = LocalPlayer:WaitForChild("Backpack", 10)
     if not backpack then return end
     
@@ -188,7 +193,7 @@ function HookBackpack()
         end
         
         if disabled > 0 then
-            warn("Disabled", disabled, "connections")
+            warn("Disabled", disabled, "Backpack connections")
         end
     end)
 end
@@ -204,31 +209,16 @@ end)
 getgenv().BlockAC = {
     Active = true,
     
-    SafeFireServer = function(remote, ...)
-        if not AntiCheatCheck(...) then
-            remote:FireServer(...)
-        end
+    SFireServer = function(remote, ...)
+        remote:FireServer(...)
     end,
     
     GetEnv = function()
-        local LocalScript = LocalPlayer.PlayerScripts:FindFirstChild("LocalScript")
         if LocalScript then
             local success, env = pcall(getsenv, LocalScript)
             return success and env or nil
         end
         return nil
-    end,
-    
-    DisableChecks = function()
-        local env = getgenv().BlockAC.GetEnv()
-        if env then
-            return pcall(function()
-                if env.v_u_1119 ~= nil then
-                    env.v_u_1119 = true
-                end
-            end)
-        end
-        return false
     end,
     
     DisableAllChecks = function()
@@ -239,24 +229,22 @@ getgenv().BlockAC = {
         
         local flags = {"v_u_1119", "v_u_1123", "v_u_1028", "v_u_1029", "v_u_900"}
         for _, flag in ipairs(flags) do
-            if pcall(function()
+            pcall(function()
                 if env[flag] ~= nil then
                     env[flag] = true
+                    success = true
                 end
-            end) then
-                success = true
-            end
+            end)
         end
         
         local functions = {"v_u_1145", "v_u_966", "v_u_1007"}
         for _, funcName in ipairs(functions) do
-            if pcall(function()
+            pcall(function()
                 if env[funcName] then
-                    env[funcName] = function(...) return true end
+                    env[funcName] = function() return true end
+                    success = true
                 end
-            end) then
-                success = true
-            end
+            end)
         end
         
         return success
@@ -269,7 +257,7 @@ getgenv().BlockAC = {
             local humanoid = LocalPlayer.Character:FindFirstChild("Humanoid")
             if humanoid then
                 pcall(function()
-                    for _, signal in pairs({"StateChanged", "Died", "HealthChanged"}) do
+                    for _, signal in pairs({"StateChanged"}) do
                         local connections = getconnections(humanoid[signal])
                         for _, conn in pairs(connections) do
                             pcall(function()
