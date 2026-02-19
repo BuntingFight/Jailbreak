@@ -347,7 +347,7 @@ getgenv().BlockAC = {
 task.spawn(function() PatchAntiCheat() end)
 
 task.spawn(function()
-    while task.wait(2) do
+    while task.wait() do
 		getgenv().BlockAC.DisableAllConnections()
 		getgenv().BlockAC.DisableAllChecks()
     end
